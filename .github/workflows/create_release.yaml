@@ -33,6 +33,7 @@ jobs:
 
           echo "Latest release tag: $TAG_NAME"
           echo "Asset URL: $ASSET_URL"
+          echo "RLS Body: $RLS_BODY"
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
           echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
