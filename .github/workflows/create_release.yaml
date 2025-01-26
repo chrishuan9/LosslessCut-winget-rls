@@ -23,6 +23,7 @@ jobs:
           echo "Fetching latest release from mifi/lossless-cut..."
           RELEASE_INFO=$(gh api repos/mifi/lossless-cut/releases/latest)
           TAG_NAME=$(echo "$RELEASE_INFO" | jq -r .tag_name)
+          RLS_BODY=$(echo "$RELEASE_INFO" | jq -r .body)
           ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | endswith("win-x64.7z")) | .browser_download_url')
 
           if [ -z "$ASSET_URL" ]; then
@@ -35,6 +36,7 @@ jobs:
 
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
           echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
+          echo "rls_body=$RLS_BODY" >> $GITHUB_ENV
 
       # Compare with the last processed version
       - name: Compare Release Version
@@ -79,7 +81,9 @@ jobs:
       - name: Create Zip Archive with Version
         run: |
           ZIP_FILENAME="losslesscut-${{ env.tag_name }}.zip"
-          zip -r "$ZIP_FILENAME" losslesscut_extracted
+          cd losslesscut_extracted
+          zip -r "../$ZIP_FILENAME" ./*
+          cd ..
           echo "Created zip file: $ZIP_FILENAME"
           echo "zip_filename=$ZIP_FILENAME" >> $GITHUB_ENV
 
@@ -90,7 +94,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: "losslesscut-${{ env.tag_name }}"
           name: "LosslessCut ${{ env.tag_name }}"
-          body: "Automated release of LosslessCut."
+          body: "${{ env.rls_body }}"
           draft: false
           prerelease: false
           artifacts: ${{ env.zip_filename }}
