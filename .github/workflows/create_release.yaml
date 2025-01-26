@@ -35,9 +35,13 @@ jobs:
           echo "Asset URL: $ASSET_URL"
           echo "RLS Body: $RLS_BODY"
 
+          # Use a delimiter to preserve newlines in rls_body
+          echo "rls_body<<EOF" >> $GITHUB_ENV
+          echo "$RLS_BODY" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
           echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
-          echo "rls_body=$RLS_BODY" >> $GITHUB_ENV
 
       # Compare with the last processed version
       - name: Compare Release Version
