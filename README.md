@@ -8,7 +8,7 @@ This repository is designed to repack the latest release of **Lossless Cut** fro
 - This repository is **not affiliated** with the developers of Lossless Cut.
 - I do **not provide any support** for the software.
 - The code is **not modified** in any way.
-- All logic for the repackaging process is implemented in the GitHub Action located at `.github/workflows/create_release.yaml`.
+- All logic for the repackaging process is implemented in the GitHub Action located at [create_release.yaml](.github/workflows/create_release.yaml).
 
 ## Installation
 
@@ -17,9 +17,6 @@ To install Lossless Cut using winget, you can use the following command:
 ```bash
 winget install ch.LooselessCut
 ```
-
-Replace `ch.LooselessCut` with the appropriate name once the package is available.
-
 ## Repository Structure
 
 - `.github/workflows/create_release.yaml`: Contains the GitHub Action logic for repackaging the latest release.
