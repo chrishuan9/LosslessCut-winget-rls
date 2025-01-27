@@ -5,7 +5,7 @@ This repository is designed to repack the latest release of **Lossless Cut** fro
 
 ## Important Notes
 
-- This repository is **not affiliated** with the developers of Lossless Cut.
+- This repository is **not affiliated** with the developers of [Lossless Cut](https://github.com/mifi/lossless-cut).
 - I do **not provide any support** for the software.
 - The code is **not modified** in any way.
 - All logic for the repackaging process is implemented in the GitHub Action located at [create_release.yaml](.github/workflows/create_release.yaml).
