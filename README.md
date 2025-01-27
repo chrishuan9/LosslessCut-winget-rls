@@ -1,0 +1,37 @@
+# README
+## Overview
+
+This repository is designed to repack the latest release of **Lossless Cut** from [mifi/lossless-cut](https://github.com/mifi/lossless-cut) and package it as a ZIP file for installation on Windows using **winget**. 
+
+## Important Notes
+
+- This repository is **not affiliated** with the developers of Lossless Cut.
+- I do **not provide any support** for the software.
+- The code is **not modified** in any way.
+- All logic for the repackaging process is implemented in the GitHub Action located at `.github/workflows/create_release.yaml`.
+
+## Installation
+
+To install Lossless Cut using winget, you can use the following command:
+
+```bash
+winget install <package-name>
+```
+
+Replace `<package-name>` with the appropriate name once the package is available.
+
+## Repository Structure
+
+- `.github/workflows/create_release.yaml`: Contains the GitHub Action logic for repackaging the latest release.
+- `README.md`: This documentation file.
+
+## License
+
+This project is licensed under the LGPL-2.1. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Lossless Cut](https://github.com/mifi/lossless-cut) for the original software.
+- [winget](https://winget.run/) for the Windows package manager.
+
+Feel free to explore the repository and contribute if you wish!
