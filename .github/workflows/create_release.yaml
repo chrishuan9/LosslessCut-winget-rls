@@ -8,56 +8,9 @@ on:
 jobs:
   check_release:
     runs-on: ubuntu-latest
-    outputs:
-      new_release: ${{ steps.check.outputs.new_release }}
-      tag_name: ${{ steps.check.outputs.tag_name }}
-      asset_url: ${{ steps.check.outputs.asset_url }}
     steps:
       - name: Check for New Release
         id: check
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
-        run: |
-          echo "Fetching latest release from mifi/lossless-cut..."
-          RELEASE_INFO=$(gh api repos/mifi/lossless-cut/releases/latest)
-          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r .tag_name)
-          ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | endswith("win-x64.7z")) | .browser_download_url')
-
-          if [ -z "$ASSET_URL" ]; then
-            echo "No .7z asset found in the latest release."
-            exit 1
-          fi
-
-          # Check if the release is already processed
-          if [ -f LATEST_RELEASE ]; then
-            LATEST_PROCESSED_VERSION=$(cat LATEST_RELEASE)
-          else
-            LATEST_PROCESSED_VERSION=""
-          fi
-
-          if [ "$LATEST_PROCESSED_VERSION" == "$TAG_NAME" ]; then
-            echo "::set-output name=new_release::false"
-          else
-            echo "::set-output name=new_release::true"
-            echo "::set-output name=tag_name::$TAG_NAME"
-            echo "::set-output name=asset_url::$ASSET_URL"
-          fi
-
-      - name: Save Processed Tag (Optional)
-        run: echo "$TAG_NAME" > LATEST_RELEASE
-
-  sync_release:
-    needs: check_release
-    if: needs.check_release.outputs.new_release == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      # Checkout the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      # Get the latest release info from LosslessCut
-      - name: Get Latest Release Info
-        id: get_release
         env:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
         run: |
@@ -84,40 +37,38 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
           echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
 
-      # Compare with the last processed version
-      - name: Compare Release Version
-        id: compare
-        run: |
-          echo "Retrieving latest processed version..."
+
+          # Check if the release is already processed
           if [ -f LATEST_RELEASE ]; then
             LATEST_PROCESSED_VERSION=$(cat LATEST_RELEASE)
           else
             LATEST_PROCESSED_VERSION=""
           fi
-          echo "Latest processed version: $LATEST_PROCESSED_VERSION"
-          echo "New release version: ${{ env.tag_name }}"
 
-          if [ "$LATEST_PROCESSED_VERSION" == "${{ env.tag_name }}" ]; then
-            echo "No new release found. Exiting."
-            echo "new_release=false" >> $GITHUB_ENV
+          if [ "$LATEST_PROCESSED_VERSION" == "$TAG_NAME" ]; then
+            echo "new_release='false'" >> $GITHUB_ENV
           else
-            echo "New release found. Proceeding."
-            echo "new_release=true" >> $GITHUB_ENV
+            echo "new_release='true'" >> $GITHUB_ENV
           fi
 
-      # Stop the job if no new release
-      - name: Stop if No New Release
-        if: env.new_release == 'false'
-        run: exit 0
+  sync_release:
+    needs: check_release
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       # Download the .7z asset
       - name: Download .7z Asset
+        if: ${{ env.new_release }} == 'true'
         run: |
           echo "Downloading .7z file..."
           curl -L "${{ env.asset_url }}" --output losslesscut.7z
 
       # Extract the .7z archive
       - name: Extract 7zip Archive
+        if: ${{ env.new_release }} == 'true'
         run: |
           sudo apt-get update && sudo apt-get install -y p7zip-full
           mkdir losslesscut_extracted
@@ -125,6 +76,7 @@ jobs:
 
       # Create a .zip file with the version number in the file name
       - name: Create Zip Archive with Version
+        if: ${{ env.new_release }} == 'true'
         run: |
           ZIP_FILENAME="losslesscut-${{ env.tag_name }}.zip"
           cd losslesscut_extracted
@@ -135,6 +87,7 @@ jobs:
 
       # Create a release and upload the .zip file
       - name: Create Release and Upload Asset
+        if: ${{ env.new_release }} == 'true'
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -147,10 +100,12 @@ jobs:
 
       # Save the processed version
       - name: Save Processed Release Version
+        if: ${{ env.new_release }} == 'true'
         run: echo "${{ env.tag_name }}" > LATEST_RELEASE
 
       # Commit and push the updated version file
       - name: Commit and Push Version File
+        if: ${{ env.new_release }} == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
         run: |
