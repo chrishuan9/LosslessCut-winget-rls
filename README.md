@@ -15,10 +15,10 @@ This repository is designed to repack the latest release of **Lossless Cut** fro
 To install Lossless Cut using winget, you can use the following command:
 
 ```bash
-winget install <package-name>
+winget install ch.LooselessCut
 ```
 
-Replace `<package-name>` with the appropriate name once the package is available.
+Replace `ch.LooselessCut` with the appropriate name once the package is available.
 
 ## Repository Structure
 
