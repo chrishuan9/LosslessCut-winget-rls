@@ -57,10 +57,10 @@ jobs:
 
           if [ "$LATEST_PROCESSED_VERSION" == "${{ env.tag_name }}" ]; then
             echo "No new release found. Exiting."
-            echo "new_release=false" >> $GITHUB_ENV
+            echo "new_release='false'" >> $GITHUB_ENV
           else
             echo "New release found. Proceeding."
-            echo "new_release=true" >> $GITHUB_ENV
+            echo "new_release='true'" >> $GITHUB_ENV
           fi
 
       # Download the .7z asset
