@@ -6,9 +6,48 @@ on:
       - main
 
 jobs:
-  sync_release:
+  check_release:
     runs-on: ubuntu-latest
+    outputs:
+      new_release: ${{ steps.check.outputs.new_release }}
+      tag_name: ${{ steps.check.outputs.tag_name }}
+      asset_url: ${{ steps.check.outputs.asset_url }}
+    steps:
+      - name: Check for New Release
+        id: check
+        run: |
+          echo "Fetching latest release from mifi/lossless-cut..."
+          RELEASE_INFO=$(gh api repos/mifi/lossless-cut/releases/latest)
+          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r .tag_name)
+          ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | endswith("win-x64.7z")) | .browser_download_url')
 
+          if [ -z "$ASSET_URL" ]; then
+            echo "No .7z asset found in the latest release."
+            exit 1
+          fi
+
+          # Check if the release is already processed
+          if [ -f LATEST_RELEASE ]; then
+            LATEST_PROCESSED_VERSION=$(cat LATEST_RELEASE)
+          else
+            LATEST_PROCESSED_VERSION=""
+          fi
+
+          if [ "$LATEST_PROCESSED_VERSION" == "$TAG_NAME" ]; then
+            echo "::set-output name=new_release::false"
+          else
+            echo "::set-output name=new_release::true"
+            echo "::set-output name=tag_name::$TAG_NAME"
+            echo "::set-output name=asset_url::$ASSET_URL"
+          fi
+
+      - name: Save Processed Tag (Optional)
+        run: echo "$TAG_NAME" > LATEST_RELEASE
+
+  sync_release:
+    needs: check_release
+    if: needs.check_release.outputs.new_release == 'true'
+    runs-on: ubuntu-latest
     steps:
       # Checkout the repository
       - name: Checkout Repository
