@@ -6,11 +6,16 @@ on:
       - main
 
 jobs:
-  check_release:
+  sync_release:
     runs-on: ubuntu-latest
     steps:
-      - name: Check for New Release
-        id: check
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Get the latest release info from LosslessCut
+      - name: Get Latest Release Info
+        id: get_release
         env:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
         run: |
@@ -37,27 +42,26 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
           echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
 
-
-          # Check if the release is already processed
+      # Compare with the last processed version
+      - name: Compare Release Version
+        id: compare
+        run: |
+          echo "Retrieving latest processed version..."
           if [ -f LATEST_RELEASE ]; then
             LATEST_PROCESSED_VERSION=$(cat LATEST_RELEASE)
           else
             LATEST_PROCESSED_VERSION=""
           fi
+          echo "Latest processed version: $LATEST_PROCESSED_VERSION"
+          echo "New release version: ${{ env.tag_name }}"
 
-          if [ "$LATEST_PROCESSED_VERSION" == "$TAG_NAME" ]; then
-            echo "new_release='false'" >> $GITHUB_ENV
+          if [ "$LATEST_PROCESSED_VERSION" == "${{ env.tag_name }}" ]; then
+            echo "No new release found. Exiting."
+            echo "new_release=false" >> $GITHUB_ENV
           else
-            echo "new_release='true'" >> $GITHUB_ENV
+            echo "New release found. Proceeding."
+            echo "new_release=true" >> $GITHUB_ENV
           fi
-
-  sync_release:
-    needs: check_release
-    runs-on: ubuntu-latest
-    steps:
-      # Checkout the repository
-      - name: Checkout Repository
-        uses: actions/checkout@v3
 
       # Download the .7z asset
       - name: Download .7z Asset
@@ -105,7 +109,7 @@ jobs:
 
       # Commit and push the updated version file
       - name: Commit and Push Version File
-        if: ${{ env.new_release }} == 'true'
+        
         env:
           GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
         run: |
