@@ -22,6 +22,8 @@ To install Lossless Cut using winget, you can use the following command:
 ```bash
 winget install ch.LosslessCut
 ```
+![Install](./assets/install.gif)
+
 ## Repository Structure
 
 - `.github/workflows/create_release.yaml`: Contains the GitHub Action logic for repackaging the latest release.
