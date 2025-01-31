@@ -1,4 +1,9 @@
-# README
+# LosslessCut Winget Release
+![Latest Release](https://img.shields.io/github/v/release/chrishuan9/losslesscut-winget-rls
+)
+![GitHub License](https://img.shields.io/github/license/chrishuan9/losslesscut-winget-rls)
+![Build](https://github.com/chrishuan9/losslesscut-winget-rls/actions/workflows/create_release.yaml/badge.svg)
+
 ## Overview
 
 This repository is designed to repack the latest release of **Lossless Cut** from [mifi/lossless-cut](https://github.com/mifi/lossless-cut) and package it as a ZIP file for installation on Windows using **winget**. 
@@ -15,7 +20,7 @@ This repository is designed to repack the latest release of **Lossless Cut** fro
 To install Lossless Cut using winget, you can use the following command:
 
 ```bash
-winget install ch.LooselessCut
+winget install ch.LosslessCut
 ```
 ## Repository Structure
 
