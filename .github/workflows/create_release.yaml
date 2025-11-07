@@ -1,6 +1,7 @@
 name: Sync LosslessCut Release
 
 on:
+  workflow_dispatch: {}
   schedule:
     - cron: '0 0 * * *'
   push:
@@ -10,11 +11,18 @@ on:
       - 'README.md'
       - '.github/workflows/create_release.yaml'
 
+permissions:
+  contents: write
+  actions: read
+
 jobs:
   check_new_release:
     runs-on: ubuntu-latest
     outputs:
-      check_new_release_found: ${{ steps.check_new_release.outputs.new_release }}
+      check_new_release_found: ${{ steps.compare.outputs.new_release }}
+      tag_name: ${{ steps.get_release.outputs.tag_name }}
+      asset_url: ${{ steps.get_release.outputs.asset_url }}
+      rls_body: ${{ steps.get_release.outputs.rls_body }}
     steps:
       # Checkout the repository
       - name: Checkout Repository
@@ -23,7 +31,7 @@ jobs:
       - name: Get Latest Release Info
         id: get_release
         env:
-            GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Fetching latest release from mifi/lossless-cut..."
           RELEASE_INFO=$(gh api repos/mifi/lossless-cut/releases/latest)
@@ -41,15 +49,17 @@ jobs:
           echo "RLS Body: $RLS_BODY"
 
           # Use a delimiter to preserve newlines in rls_body
-          echo "rls_body<<EOF" >> $GITHUB_ENV
-          echo "$RLS_BODY" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "rls_body<<EOF" >> $GITHUB_OUTPUT
+          echo "$RLS_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
-          echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "asset_url=$ASSET_URL" >> $GITHUB_OUTPUT
 
       - name: Compare Release Version
         id: compare
+        env:
+          TAG_NAME: ${{ steps.get_release.outputs.tag_name }}
         run: |
           echo "Retrieving latest processed version..."
           if [ -f LATEST_RELEASE ]; then
@@ -58,9 +68,9 @@ jobs:
             LATEST_PROCESSED_VERSION=""
           fi
           echo "Latest processed version: $LATEST_PROCESSED_VERSION"
-          echo "New release version: ${{ env.tag_name }}"
+          echo "New release version: $TAG_NAME"
 
-          if [ "$LATEST_PROCESSED_VERSION" == "${{ env.tag_name }}" ]; then
+          if [ "$LATEST_PROCESSED_VERSION" == "$TAG_NAME" ]; then
             echo "No new release found. Exiting."
             echo "new_release=false" >> $GITHUB_OUTPUT
           else
@@ -76,44 +86,15 @@ jobs:
       # Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
-
-      # Get the latest release info from LosslessCut
-      - name: Get Latest Release Info
-        id: get_release
-        env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
-        run: |
-          echo "Fetching latest release from mifi/lossless-cut..."
-          RELEASE_INFO=$(gh api repos/mifi/lossless-cut/releases/latest)
-          TAG_NAME=$(echo "$RELEASE_INFO" | jq -r .tag_name)
-          RLS_BODY=$(echo "$RELEASE_INFO" | jq -r .body)
-          ASSET_URL=$(echo "$RELEASE_INFO" | jq -r '.assets[] | select(.name | endswith("win-x64.7z")) | .browser_download_url')
-
-          if [ -z "$ASSET_URL" ]; then
-            echo "No .7z asset found in the latest release."
-            exit 1
-          fi
-
-          echo "Latest release tag: $TAG_NAME"
-          echo "Asset URL: $ASSET_URL"
-          echo "RLS Body: $RLS_BODY"
-
-          # Use a delimiter to preserve newlines in rls_body
-          echo "rls_body<<EOF" >> $GITHUB_ENV
-          echo "$RLS_BODY" >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
-          echo "tag_name=$TAG_NAME" >> $GITHUB_ENV
-          echo "asset_url=$ASSET_URL" >> $GITHUB_ENV
-
-
-
+      # Use outputs from the check_new_release job (avoids refetching)
 
       # Download the .7z asset
       - name: Download .7z Asset
+        env:
+          ASSET_URL: ${{ needs.check_new_release.outputs.asset_url }}
         run: |
           echo "Downloading .7z file..."
-          curl -L "${{ env.asset_url }}" --output losslesscut.7z
+          curl -L "$ASSET_URL" --output losslesscut.7z
 
       # Extract the .7z archive
       - name: Extract 7zip Archive
@@ -124,38 +105,41 @@ jobs:
 
       # Create a .zip file with the version number in the file name
       - name: Create Zip Archive with Version
+        id: create_zip
+        env:
+          TAG_NAME: ${{ needs.check_new_release.outputs.tag_name }}
         run: |
-          ZIP_FILENAME="losslesscut-${{ env.tag_name }}.zip"
+          ZIP_FILENAME="losslesscut-$TAG_NAME.zip"
           cd losslesscut_extracted
           zip -r "../$ZIP_FILENAME" ./*
           cd ..
           echo "Created zip file: $ZIP_FILENAME"
-          echo "zip_filename=$ZIP_FILENAME" >> $GITHUB_ENV
+          echo "zip_filename=$ZIP_FILENAME" >> $GITHUB_OUTPUT
 
       # Create a release and upload the .zip file
       - name: Create Release and Upload Asset
         uses: ncipollo/release-action@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag: "losslesscut-${{ env.tag_name }}"
-          name: "LosslessCut ${{ env.tag_name }}"
-          body: "${{ env.rls_body }}"
+          tag: "losslesscut-${{ needs.check_new_release.outputs.tag_name }}"
+          name: "LosslessCut ${{ needs.check_new_release.outputs.tag_name }}"
+          body: ${{ needs.check_new_release.outputs.rls_body }}
           draft: false
           prerelease: false
-          artifacts: ${{ env.zip_filename }}
+          artifacts: ${{ steps.create_zip.outputs.zip_filename }}
 
       # Save the processed version
       - name: Save Processed Release Version
-        run: echo "${{ env.tag_name }}" > LATEST_RELEASE
+        run: echo "${{ needs.check_new_release.outputs.tag_name }}" > LATEST_RELEASE
 
       # Commit and push the updated version file
       - name: Commit and Push Version File
         
         env:
-          GITHUB_TOKEN: ${{ secrets.MY_GITHUB_ACTION_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add LATEST_RELEASE
-          git commit -m "Update latest processed release to ${{ env.tag_name }}"
+          git commit -m "Update latest processed release to ${{ needs.check_new_release.outputs.tag_name }}"
           git push
