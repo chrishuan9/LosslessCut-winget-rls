@@ -344,4 +344,6 @@ jobs:
             --title "$PR_TITLE" \
             --body "$PR_BODY"
         env:
-          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # GitHub App tokens cannot create PRs to repos where the app isn't installed.
+          # Use a classic PAT with public_repo scope for creating PRs to microsoft/winget-pkgs
+          GITHUB_TOKEN: ${{ secrets.PR_TOKEN }}
