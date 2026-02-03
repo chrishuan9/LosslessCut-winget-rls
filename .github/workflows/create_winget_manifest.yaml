@@ -107,33 +107,30 @@ jobs:
         run: |
           Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
 
-      - name: Create Manifest Directory
+      - name: Generate Manifest with wingetcreate
         id: manifest_dir
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version_without_v }}"
-          $manifestDir = "manifests/c/ch/LosslessCut/$version"
-          New-Item -ItemType Directory -Path $manifestDir -Force
-          "manifest_dir=$manifestDir" >> $env:GITHUB_OUTPUT
-
-      - name: Generate Manifest with wingetcreate
-        shell: pwsh
-        run: |
-          $version = "${{ steps.version.outputs.version_without_v }}"
           $installerUrl = "${{ steps.installer.outputs.installer_url }}"
-          $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
 
           Write-Host "Generating manifest for version $version"
           Write-Host "Installer URL: $installerUrl"
 
+          # wingetcreate creates its own directory structure: output/manifests/c/ch/LosslessCut/<version>/
           ./wingetcreate.exe update ${{ env.PACKAGE_IDENTIFIER }} `
             --urls $installerUrl `
             --version $version `
-            --out $manifestDir `
+            --out output `
             --token ${{ steps.app-token.outputs.token }}
+
+          # Find the actual manifest directory created by wingetcreate
+          $manifestDir = "output/manifests/c/ch/LosslessCut/$version"
 
           Write-Host "Generated manifest files:"
           Get-ChildItem -Path $manifestDir -Recurse
+
+          "manifest_dir=$manifestDir" >> $env:GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
@@ -177,7 +174,7 @@ jobs:
         shell: pwsh
         run: |
           $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
-          Get-ChildItem -Path $manifestDir | ForEach-Object {
+          Get-ChildItem -Path $manifestDir -File | ForEach-Object {
             Write-Host "=== $($_.Name) ==="
             Get-Content $_.FullName
             Write-Host ""
@@ -187,7 +184,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: winget-manifest
-          path: manifests/
+          path: output/manifests/
 
   push_to_manifest_repo:
     needs: create_manifest
