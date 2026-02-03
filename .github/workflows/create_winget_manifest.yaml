@@ -1,0 +1,350 @@
+name: Create Winget Manifest
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to create manifest for (e.g., v3.68.0). Leave empty to use latest release.'
+        required: false
+        type: string
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE_IDENTIFIER: ch.LosslessCut
+  WINGET_PKGS_REPO: microsoft/winget-pkgs
+  MANIFEST_REPO: chrishuan9/Lossless-winget-manifest
+  WINGET_RLS_REPO: chrishuan9/LosslessCut-winget-rls
+  GITHUB_USERNAME: chrishuan9
+
+jobs:
+  create_manifest:
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.version.outputs.version_without_v }}
+      version_with_v: ${{ steps.version.outputs.version_with_v }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ env.GITHUB_USERNAME }}
+          repositories: "LosslessCut-winget-rls,Lossless-winget-manifest,winget-pkgs"
+
+      - name: Determine Version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "release") {
+            $version = "${{ github.event.release.tag_name }}"
+          } elseif ("${{ github.event.inputs.version }}" -ne "") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            # Get latest release tag from this repo
+            $latestRelease = gh api repos/${{ env.WINGET_RLS_REPO }}/releases/latest --jq '.tag_name'
+            $version = $latestRelease
+          }
+
+          # Remove 'losslesscut-' prefix if present (releases are tagged as losslesscut-v3.68.0)
+          $version = $version -replace '^losslesscut-', ''
+
+          # Store both with and without 'v' prefix
+          $versionWithV = if ($version -match '^v') { $version } else { "v$version" }
+          $versionWithoutV = $version -replace '^v', ''
+
+          Write-Host "Version with v: $versionWithV"
+          Write-Host "Version without v: $versionWithoutV"
+
+          "version_with_v=$versionWithV" >> $env:GITHUB_OUTPUT
+          "version_without_v=$versionWithoutV" >> $env:GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Construct Installer URL and Get SHA256
+        id: installer
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version_with_v }}"
+          $installerUrl = "https://github.com/${{ env.WINGET_RLS_REPO }}/releases/download/losslesscut-$version/losslesscut-$version.zip"
+
+          Write-Host "Installer URL: $installerUrl"
+
+          # Download file to calculate SHA256
+          $tempFile = Join-Path $env:TEMP "losslesscut-$version.zip"
+          Write-Host "Downloading to calculate SHA256..."
+          Invoke-WebRequest -Uri $installerUrl -OutFile $tempFile
+
+          $sha256 = (Get-FileHash -Path $tempFile -Algorithm SHA256).Hash
+          Write-Host "SHA256: $sha256"
+
+          Remove-Item $tempFile -Force
+
+          "installer_url=$installerUrl" >> $env:GITHUB_OUTPUT
+          "sha256=$sha256" >> $env:GITHUB_OUTPUT
+
+      - name: Get Release Date
+        id: release_date
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version_with_v }}"
+          $releaseInfo = gh api repos/${{ env.WINGET_RLS_REPO }}/releases/tags/losslesscut-$version --jq '.published_at'
+          $releaseDate = ([datetime]$releaseInfo).ToString("yyyy-MM-dd")
+          Write-Host "Release Date: $releaseDate"
+          "release_date=$releaseDate" >> $env:GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Create Manifest Directory
+        id: manifest_dir
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version_without_v }}"
+          $manifestDir = "manifests/c/ch/LosslessCut/$version"
+          New-Item -ItemType Directory -Path $manifestDir -Force
+          "manifest_dir=$manifestDir" >> $env:GITHUB_OUTPUT
+
+      - name: Generate Manifest with wingetcreate
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version_without_v }}"
+          $installerUrl = "${{ steps.installer.outputs.installer_url }}"
+          $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
+
+          Write-Host "Generating manifest for version $version"
+          Write-Host "Installer URL: $installerUrl"
+
+          ./wingetcreate.exe update ${{ env.PACKAGE_IDENTIFIER }} `
+            --urls $installerUrl `
+            --version $version `
+            --out $manifestDir `
+            --token ${{ steps.app-token.outputs.token }}
+
+          Write-Host "Generated manifest files:"
+          Get-ChildItem -Path $manifestDir -Recurse
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Fix Release Date in Manifest
+        shell: pwsh
+        run: |
+          $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
+          $releaseDate = "${{ steps.release_date.outputs.release_date }}"
+          $installerFile = Join-Path $manifestDir "${{ env.PACKAGE_IDENTIFIER }}.installer.yaml"
+
+          if (Test-Path $installerFile) {
+            $content = Get-Content $installerFile -Raw
+            if ($content -match 'ReleaseDate:') {
+              $content = $content -replace 'ReleaseDate:.*', "ReleaseDate: $releaseDate"
+            } else {
+              $content = $content -replace '(ManifestType: installer)', "ReleaseDate: $releaseDate`n`$1"
+            }
+            Set-Content -Path $installerFile -Value $content -NoNewline
+            Write-Host "Updated ReleaseDate in installer manifest"
+          }
+
+      - name: Update Locale Manifest URLs
+        shell: pwsh
+        run: |
+          $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
+          $version = "${{ steps.version.outputs.version_with_v }}"
+          $localeFile = Join-Path $manifestDir "${{ env.PACKAGE_IDENTIFIER }}.locale.en-US.yaml"
+
+          if (Test-Path $localeFile) {
+            $content = Get-Content $localeFile -Raw
+
+            $releaseNotesUrl = "https://github.com/${{ env.WINGET_RLS_REPO }}/releases/tag/losslesscut-$version"
+            $content = $content -replace 'ReleaseNotesUrl:.*', "ReleaseNotesUrl: $releaseNotesUrl"
+            $content = $content -replace 'PackageUrl:.*', "PackageUrl: $releaseNotesUrl"
+
+            Set-Content -Path $localeFile -Value $content -NoNewline
+            Write-Host "Updated URLs in locale manifest"
+          }
+
+      - name: Display Generated Manifests
+        shell: pwsh
+        run: |
+          $manifestDir = "${{ steps.manifest_dir.outputs.manifest_dir }}"
+          Get-ChildItem -Path $manifestDir | ForEach-Object {
+            Write-Host "=== $($_.Name) ==="
+            Get-Content $_.FullName
+            Write-Host ""
+          }
+
+      - name: Upload Manifest Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifest
+          path: manifests/
+
+  push_to_manifest_repo:
+    needs: create_manifest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: chrishuan9
+          repositories: "Lossless-winget-manifest"
+
+      - name: Download Manifest Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: winget-manifest
+          path: manifests/
+
+      - name: Get Version from Manifest
+        id: get_version
+        run: |
+          VERSION=$(ls manifests/c/ch/LosslessCut/)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Clone Manifest Repo
+        run: |
+          git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/chrishuan9/Lossless-winget-manifest.git manifest-repo
+
+      - name: Copy Manifest Files
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          mkdir -p manifest-repo/manifests/c/ch/LosslessCut/$VERSION
+          cp -r manifests/c/ch/LosslessCut/$VERSION/* manifest-repo/manifests/c/ch/LosslessCut/$VERSION/
+
+      - name: Commit and Push to Manifest Repo
+        run: |
+          cd manifest-repo
+          VERSION="${{ steps.get_version.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+          git diff --staged --quiet || git commit -m "Add manifest for LosslessCut $VERSION"
+          git push
+
+  create_winget_pr:
+    needs: [create_manifest, push_to_manifest_repo]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: chrishuan9
+          repositories: "winget-pkgs"
+
+      - name: Download Manifest Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: winget-manifest
+          path: manifests/
+
+      - name: Get Version from Manifest
+        id: get_version
+        run: |
+          VERSION=$(ls manifests/c/ch/LosslessCut/)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Ensure Fork Exists
+        run: |
+          # Check if fork exists, if not create it
+          if ! gh repo view chrishuan9/winget-pkgs &>/dev/null; then
+            echo "Forking microsoft/winget-pkgs..."
+            gh repo fork microsoft/winget-pkgs --clone=false
+          else
+            echo "Fork already exists"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Clone Fork and Create Branch
+        id: branch
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BRANCH_NAME="ch.LosslessCut-$VERSION-$(uuidgen | cut -d'-' -f1-4)"
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+          git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/chrishuan9/winget-pkgs.git winget-fork
+          cd winget-fork
+
+          # Sync fork with upstream
+          git remote add upstream https://github.com/microsoft/winget-pkgs.git
+          git fetch upstream
+          git checkout master
+          git reset --hard upstream/master
+          git push origin master --force
+
+          # Create new branch
+          git checkout -b $BRANCH_NAME
+
+      - name: Copy Manifest to Fork
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          mkdir -p winget-fork/manifests/c/ch/LosslessCut/$VERSION
+          cp -r manifests/c/ch/LosslessCut/$VERSION/* winget-fork/manifests/c/ch/LosslessCut/$VERSION/
+
+      - name: Commit and Push to Fork
+        run: |
+          cd winget-fork
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BRANCH_NAME="${{ steps.branch.outputs.branch_name }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+          git commit -m "New Version: ch.LosslessCut version $VERSION"
+          git push origin $BRANCH_NAME
+
+      - name: Create Pull Request
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          BRANCH_NAME="${{ steps.branch.outputs.branch_name }}"
+
+          PR_TITLE="New Version: ch.LosslessCut version $VERSION"
+
+          PR_BODY=$(cat << 'EOF'
+          Checklist for Pull Requests
+          - [x] Have you signed the [Contributor License Agreement](https://cla.opensource.microsoft.com/microsoft/winget-pkgs)?
+          - [x] Is there a linked Issue?
+
+          Manifests
+          - [x] Have you checked that there aren't other open [pull requests](https://github.com/microsoft/winget-pkgs/pulls) for the same manifest update/change?
+          - [x] This PR only modifies one (1) manifest
+          - [x] Have you [validated](https://github.com/microsoft/winget-pkgs/blob/master/doc/Authoring.md#validation) your manifest locally with `winget validate --manifest <path>`?
+          - [x] Have you tested your manifest locally with `winget install --manifest <path>`?
+          - [x] Does your manifest conform to the [1.10 schema](https://github.com/microsoft/winget-pkgs/tree/master/doc/manifest/schema/1.10.0)?
+
+          Note: `<path>` is the directory's name containing the manifest you're submitting.
+
+          ---
+
+          ###### Microsoft Reviewers: [Open in CodeFlow](https://microsoft.github.io/open-pr/?codeflow=https://github.com/microsoft/winget-pkgs/pull/)
+          EOF
+          )
+
+          gh pr create \
+            --repo microsoft/winget-pkgs \
+            --head "chrishuan9:$BRANCH_NAME" \
+            --base master \
+            --title "$PR_TITLE" \
+            --body "$PR_BODY"
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
