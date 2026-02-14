@@ -3,6 +3,7 @@
 )
 ![GitHub License](https://img.shields.io/github/license/chrishuan9/losslesscut-winget-rls)
 ![Build](https://github.com/chrishuan9/losslesscut-winget-rls/actions/workflows/create_release.yaml/badge.svg)
+![Build](https://github.com/chrishuan9/losslesscut-winget-rls/actions/workflows/create_winget_manifest.yaml/badge.svg)
 ![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/chrishuan9/LosslessCut-winget-rls/total)
 
 ## Overview
