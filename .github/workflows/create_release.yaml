@@ -9,7 +9,7 @@ on:
       - main
     paths-ignore:
       - 'README.md'
-      - '.github/workflows/create_release.yaml'
+      - '.github/workflows/*'
 
 permissions:
   contents: write
