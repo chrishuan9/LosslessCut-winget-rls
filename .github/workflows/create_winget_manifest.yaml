@@ -16,7 +16,7 @@ permissions:
 env:
   PACKAGE_IDENTIFIER: ch.LosslessCut
   WINGET_PKGS_REPO: microsoft/winget-pkgs
-  MANIFEST_REPO: chrishuan9/Lossless-winget-manifest
+  MANIFEST_REPO: chrishuan9/LosslessCut-winget-manifest
   WINGET_RLS_REPO: chrishuan9/LosslessCut-winget-rls
   GITHUB_USERNAME: chrishuan9
 
@@ -37,7 +37,7 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ env.GITHUB_USERNAME }}
-          repositories: "LosslessCut-winget-rls,Lossless-winget-manifest,winget-pkgs"
+          repositories: "LosslessCut-winget-rls,LosslessCut-winget-manifest,winget-pkgs"
 
       - name: Determine Version
         id: version
@@ -197,7 +197,7 @@ jobs:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: chrishuan9
-          repositories: "Lossless-winget-manifest"
+          repositories: "LosslessCut-winget-manifest"
 
       - name: Download Manifest Artifacts
         uses: actions/download-artifact@v4
@@ -213,7 +213,7 @@ jobs:
 
       - name: Clone Manifest Repo
         run: |
-          git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/chrishuan9/Lossless-winget-manifest.git manifest-repo
+          git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/chrishuan9/LosslessCut-winget-manifest.git manifest-repo
 
       - name: Copy Manifest Files
         run: |
