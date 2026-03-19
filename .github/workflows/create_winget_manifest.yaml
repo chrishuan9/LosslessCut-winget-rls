@@ -1,4 +1,4 @@
-name: Create Winget Manifest
+name: Release
 
 on:
   workflow_dispatch:
