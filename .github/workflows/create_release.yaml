@@ -1,4 +1,4 @@
-name: Sync LosslessCut Release
+name: Build
 
 on:
   workflow_dispatch: {}
