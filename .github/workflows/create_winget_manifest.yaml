@@ -281,15 +281,10 @@ jobs:
           git clone https://x-access-token:${{ steps.app-token.outputs.token }}@github.com/chrishuan9/winget-pkgs.git winget-fork
           cd winget-fork
 
-          # Sync fork with upstream
+          # Create branch directly from upstream/master to avoid pushing workflow files
           git remote add upstream https://github.com/microsoft/winget-pkgs.git
           git fetch upstream
-          git checkout master
-          git reset --hard upstream/master
-          git push origin master --force
-
-          # Create new branch
-          git checkout -b $BRANCH_NAME
+          git checkout -b $BRANCH_NAME upstream/master
 
       - name: Copy Manifest to Fork
         run: |
