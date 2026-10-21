@@ -162,9 +162,9 @@ jobs:
           if (Test-Path $localeFile) {
             $content = Get-Content $localeFile -Raw
 
-            $releaseNotesUrl = "https://github.com/${{ env.WINGET_RLS_REPO }}/releases/tag/losslesscut-$version"
+            $releaseNotesUrl = "https://github.com/mifi/lossless-cut/releases/tag/$version"
             $content = $content -replace 'ReleaseNotesUrl:.*', "ReleaseNotesUrl: $releaseNotesUrl"
-            $content = $content -replace 'PackageUrl:.*', "PackageUrl: $releaseNotesUrl"
+            $content = $content -replace 'PackageUrl:.*', "PackageUrl: https://losslesscut.app/"
 
             Set-Content -Path $localeFile -Value $content -NoNewline
             Write-Host "Updated URLs in locale manifest"
