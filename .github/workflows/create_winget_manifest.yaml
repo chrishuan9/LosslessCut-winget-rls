@@ -28,13 +28,13 @@ jobs:
       version_with_v: ${{ steps.version.outputs.version_with_v }}
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}.
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ env.GITHUB_USERNAME }}
           repositories: "LosslessCut-winget-rls,LosslessCut-winget-manifest,winget-pkgs"
@@ -113,19 +113,24 @@ jobs:
         run: |
           $version = "${{ steps.version.outputs.version_without_v }}"
           $installerUrl = "${{ steps.installer.outputs.installer_url }}"
+          $manifestDir = "output/manifests/c/ch/LosslessCut/$version"
 
           Write-Host "Generating manifest for version $version"
           Write-Host "Installer URL: $installerUrl"
-
-          # wingetcreate creates its own directory structure: output/manifests/c/ch/LosslessCut/<version>/
-          ./wingetcreate.exe update ${{ env.PACKAGE_IDENTIFIER }} `
-            --urls $installerUrl `
-            --version $version `
-            --out output `
-            --token ${{ steps.app-token.outputs.token }}
-
-          # Find the actual manifest directory created by wingetcreate
-          $manifestDir = "output/manifests/c/ch/LosslessCut/$version"
+          
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            Write-Host "wingetcreate attempt $attempt for $version"
+            ./wingetcreate.exe update ${{ env.PACKAGE_IDENTIFIER }} `
+              --urls $installerUrl `
+              --version $version `
+              --out output `
+              --token ${{ steps.app-token.outputs.token }}
+            if ($LASTEXITCODE -eq 0 -and (Test-Path $manifestDir)) { break }
+            if ($attempt -eq 4) { Write-Error "wingetcreate failed after $attempt attempts"; exit 1 }
+            $wait = 30 * $attempt
+            Write-Host "Failed (exit $LASTEXITCODE), retrying in $wait s..."
+            Start-Sleep -Seconds $wait
+          }
 
           Write-Host "Generated manifest files:"
           Get-ChildItem -Path $manifestDir -Recurse
@@ -181,7 +186,7 @@ jobs:
           }
 
       - name: Upload Manifest Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: winget-manifest
           path: output/manifests/
@@ -200,7 +205,7 @@ jobs:
           repositories: "LosslessCut-winget-manifest"
 
       - name: Download Manifest Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: winget-manifest
           path: manifests/
