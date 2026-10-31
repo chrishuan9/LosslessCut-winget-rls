@@ -34,7 +34,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ secrets.APP_CLIENT_ID }}.
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ env.GITHUB_USERNAME }}
           repositories: "LosslessCut-winget-rls,LosslessCut-winget-manifest,winget-pkgs"
@@ -197,11 +197,11 @@ jobs:
     steps:
       - name: Generate GitHub App Token
         id: app-token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ secrets.APP_ID }}
+          client-id: ${{ secrets.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
-          owner: chrishuan9
+          owner: ${{ env.GITHUB_USERNAME }}
           repositories: "LosslessCut-winget-manifest"
 
       - name: Download Manifest Artifacts
